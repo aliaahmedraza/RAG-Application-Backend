@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "npx nodemon --watch src --exec node src/app.js",
-    "dev": "npx nodemon --watch src --exec node src/worker.js"
+    "start": "node src/app.js",
+    "worker": "node src/worker.js",
+    "dev": "npx nodemon --watch src --exec node src/app.js",
+    "dev:worker": "npx nodemon --watch src --exec node src/worker.js"
   },
   "author": "",
   "license": "ISC",

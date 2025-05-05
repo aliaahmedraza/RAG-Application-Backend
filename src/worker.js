@@ -12,8 +12,9 @@ import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
 
 dotenv.config();
 
-const connection = new IORedis({ maxRetriesPerRequest: null });
-
+const connection = new IORedis(process.env.REDIS_URL || "redis://127.0.0.1:6379", {
+    maxRetriesPerRequest: null,
+});
 const worker = new Worker(
     'file-upload-queue',
     async job => {
