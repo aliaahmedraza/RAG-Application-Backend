@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node src/app.js",
+    "app": "node src/app.js",
     "worker": "node src/worker.js",
+    "start": "concurrently \"npm run app\" \"npm run worker\"",
     "dev": "npx nodemon --watch src --exec node src/app.js",
     "dev:worker": "npx nodemon --watch src --exec node src/worker.js"
   },
@@ -21,6 +22,7 @@
     "@langchain/qdrant": "^0.1.2",
     "bullmq": "^5.49.2",
     "cohere-ai": "^7.17.1",
+    "concurrently": "^9.1.2",
     "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
