@@ -133,7 +133,7 @@ import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: "http://localhost:3000" }));
+app.use(cors({ origin: "https://rag-application-backend-jvja.onrender.com" }));
 app.use(express.json());
 
 // ─── Redis Connection Using VALKEY_URL ───────────────────────────────

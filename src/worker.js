@@ -94,8 +94,15 @@ import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
 dotenv.config();
 
 // ─── Connect to Valkey (Redis-protocol) instead of Redis Cloud ─────────────────
+// src/worker.js and src/app.js
 const connection = new IORedis(process.env.VALKEY_URL, {
-    maxRetriesPerRequest: null
+    maxRetriesPerRequest: null,
+    enableReadyCheck: true,
+    reconnectOnError: (err) => {
+        console.warn("Redis reconnecting due to error:", err.message);
+        return true; // auto-reconnect
+    },
+    enableOfflineQueue: true, // queue commands while disconnected
 });
 console.log("✅ Redis connected:", process.env.VALKEY_URL);
 
