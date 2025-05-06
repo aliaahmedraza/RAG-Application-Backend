@@ -97,7 +97,7 @@ dotenv.config();
 const connection = new IORedis(process.env.VALKEY_URL, {
     maxRetriesPerRequest: null
 });
-console.log("✅ Valkey connected:", process.env.VALKEY_URL);
+console.log("✅ Redis connected:", process.env.VALKEY_URL);
 
 // ─── Worker Definition ────────────────────────────────────────────────────────
 const worker = new Worker(
