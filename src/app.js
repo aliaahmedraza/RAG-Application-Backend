@@ -133,7 +133,7 @@ import OpenAI from "openai";
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: "https://pdfrag-five.vercel.app", credentials: true }));
+app.use(cors({ origin: "https://pdfrag-five.vercel.app"}));
 app.use(express.json());
 
 const connection = new IORedis(process.env.VALKEY_URL, {
