@@ -7,6 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "app": "node src/app.js",
     "worker": "node src/worker.js",
+    "you": "node --watch src/you.js",
     "start": "concurrently \"npm run app\" \"npm run worker\"",
     "dev": "npx nodemon --watch src --exec node src/app.js",
     "dev:worker": "npx nodemon --watch src --exec node src/worker.js"
