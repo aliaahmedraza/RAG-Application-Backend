@@ -21,6 +21,7 @@
     "@langchain/langgraph": "^0.2.66",
     "@langchain/openai": "^0.5.6",
     "@langchain/qdrant": "^0.1.2",
+    "aws-sdk": "^2.1692.0",
     "bullmq": "^5.49.2",
     "cohere-ai": "^7.17.1",
     "concurrently": "^9.1.2",
