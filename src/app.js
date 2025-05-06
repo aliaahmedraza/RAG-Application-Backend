@@ -124,7 +124,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 import { Queue } from 'bullmq';
-import IORedis from 'ioredis'; // <-- Add this import
+import IORedis from 'ioredis';
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
 import { CohereClient } from "cohere-ai";
@@ -136,16 +136,15 @@ const app = express();
 app.use(cors({ origin: "https://pdfrag-five.vercel.app", credentials: true }));
 app.use(express.json());
 
-// ─── Redis Connection Using VALKEY_URL ───────────────────────────────
 const connection = new IORedis(process.env.VALKEY_URL, {
     maxRetriesPerRequest: null
 });
 console.log("✅ Redis connected in API:", process.env.VALKEY_URL);
 
-// ─── Queue Setup ────────────────────────────────────────────────────
+
 const queue = new Queue('file-upload-queue', { connection });
 
-// ─── Multer Setup ───────────────────────────────────────────────────
+
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
         cb(null, "uploads/");
@@ -157,7 +156,6 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// ─── Upload Endpoint ────────────────────────────────────────────────
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({
@@ -178,7 +176,6 @@ app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
     });
 });
 
-// ─── Chat Endpoint ──────────────────────────────────────────────────
 app.get("/chat", async (req, res) => {
     const userQuery = req.query.message;
     if (!userQuery) {
@@ -221,7 +218,6 @@ app.get("/chat", async (req, res) => {
     });
 });
 
-// ─── Start Server ───────────────────────────────────────────────────
 const port = process.env.PORT || 3006;
 app.listen(port, () => {
     console.log(`✅ API Server is running on port ${port}`);
