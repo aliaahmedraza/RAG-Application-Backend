@@ -1,87 +1,3 @@
-// import { Worker } from 'bullmq';
-// // import IORedis from 'ioredis';
-// import dotenv from 'dotenv';
-// import { QdrantVectorStore } from "@langchain/qdrant";
-// // import { OpenAIEmbeddings } from "@langchain/openai";
-// import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
-// import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
-// import { QdrantClient } from "@qdrant/js-client-rest";
-// import { v4 as uuidv4 } from 'uuid';
-// // import { FakeEmbeddings } from "@langchain/core/utils/testing";
-// import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
-
-// dotenv.config();
-// // const connection = new IORedis(process.env.REDIS_URL, {
-// //     maxRetriesPerRequest: null
-// // });
-// // console.log("Redis connection established", connection, process.env.REDIS_URL);
-// const worker = new Worker(
-//     'file-upload-queue',
-//     async job => {
-//         try {
-//             console.log("Job data:", job.data);
-
-//             const data = typeof job.data === 'string' ? JSON.parse(job.data) : job.data;
-//             const loader = new PDFLoader(data.filePath);
-//             const docs = await loader.load();
-
-//             const splitter = new RecursiveCharacterTextSplitter({
-//                 chunkSize: 500,
-//                 chunkOverlap: 1,
-//             });
-
-//             const splitDocs = await splitter.splitDocuments(docs);
-//             const splitDocsWithId = splitDocs.map(doc => ({
-//                 ...doc,
-//                 metadata: {
-//                     ...doc.metadata,
-//                     id: uuidv4(),
-//                 }
-//             }));
-
-//             console.log("Sample processed documents:", splitDocsWithId.slice(0, 3));
-//             const qdrantUrl = process.env.QDRANT_URL;
-//             const client = new QdrantClient({ url: qdrantUrl });
-
-
-//             // const embeddings = new OpenAIEmbeddings({
-//             //     model: "text-embedding-3-small",
-//             //     apiKey: process.env.OPENAI_API_KEY,
-//             // });
-
-
-//             // const embeddings = new FakeEmbeddings(); // Returns random vectors for testing
-//             const embeddings = new CohereEmbeddings({
-//                 apiKey: process.env.COHERE_API_KEY,
-//                 model: "embed-english-v3.0",
-//             });
-
-//             // Step 4: Create or connect to Qdrant collection and store embeddings
-//             const vectorStore = await QdrantVectorStore.fromDocuments(
-//                 splitDocsWithId,
-//                 embeddings,
-//                 {
-//                     url: qdrantUrl,
-//                     collectionName: "pdf-docs",
-//                 }
-//             );
-
-//             console.log("All documents added to Qdrant successfully");
-
-//         } catch (error) {
-//             console.error("Failed to process job:", error);
-//         }
-//     },
-//     {
-//         connection: {
-//             host: process.env.REDIS_HOST,
-//             port: process.env.REDIS_PORT,
-//         }
-//     }
-// );
-// worker.on('completed', (job) => {
-//     console.log(`Job ${job.id} completed successfully`);
-// });
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import dotenv from 'dotenv';
@@ -90,9 +6,14 @@ import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { v4 as uuidv4 } from 'uuid';
 import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
+import fs from 'fs/promises';
 
 dotenv.config();
 
+if (!process.env.COHERE_API_KEY) {
+    console.error("CRITICAL: COHERE_API_KEY is not defined. Worker cannot start.");
+    process.exit(1);
+}
 
 const connection = new IORedis(process.env.VALKEY_URL, {
     maxRetriesPerRequest: null,
@@ -107,7 +28,7 @@ console.log("✅ Redis connected:", process.env.VALKEY_URL);
 
 
 const worker = new Worker(
-    'file-upload-queue',
+    process.env.QUEUE_NAME || 'file-upload-queue',
     async job => {
         try {
             console.log("▶️  Job data received:", job.data);
@@ -121,8 +42,8 @@ const worker = new Worker(
 
 
             const splitter = new RecursiveCharacterTextSplitter({
-                chunkSize: 500,
-                chunkOverlap: 1,
+                chunkSize: parseInt(process.env.TEXT_SPLITTER_CHUNK_SIZE) || 500,
+                chunkOverlap: parseInt(process.env.TEXT_SPLITTER_CHUNK_OVERLAP) || 1,
             });
             const splitDocs = await splitter.splitDocuments(docs);
             console.log(`   • Split into ${splitDocs.length} chunks.`);
@@ -139,23 +60,47 @@ const worker = new Worker(
             if (!qdrantUrl) throw new Error("Missing QDRANT_URL!");
             console.log("   • Inserting into Qdrant at", qdrantUrl);
 
+            // OpenAIEmbeddings and FakeEmbeddings were part of the removed old logic.
+            // The active code uses CohereEmbeddings.
             const embeddings = new CohereEmbeddings({
-                apiKey: process.env.COHERE_API_KEY,
-                model: "embed-english-v3.0",
+                apiKey: process.env.COHERE_API_KEY, // Already an env var
+                model: process.env.COHERE_EMBED_MODEL || "embed-english-v3.0",
             });
 
             await QdrantVectorStore.fromDocuments(
                 splitDocsWithId,
                 embeddings,
-                { url: qdrantUrl, collectionName: "pdf-docs" }
+                { url: qdrantUrl, collectionName: process.env.QDRANT_COLLECTION_NAME || "pdf-docs" }
             );
 
             console.log("✅ Successfully added all documents to Qdrant.");
+
+            try {
+                console.log(`   • Deleting temporary file: ${data.filePath}`);
+                await fs.unlink(data.filePath);
+                console.log(`   • Successfully deleted temporary file: ${data.filePath}`);
+            } catch (unlinkError) {
+                console.error(` Failed to delete temporary file ${data.filePath}:`, unlinkError);
+                // Decide if this error should cause the job to fail or just log a warning
+                // For now, let's log it and not re-throw, as the main task (Qdrant insertion) was successful.
+            }
 
             return { inserted: splitDocsWithId.length };
         }
         catch (error) {
             console.error(" Failed to process job:", error);
+            // If the file path exists in data, try to clean it up even if the main processing failed.
+            // This is a basic cleanup attempt; more robust error handling might be needed.
+            const data = typeof job.data === 'string' ? JSON.parse(job.data) : job.data;
+            if (data && data.filePath) {
+                try {
+                    console.log(`   • Attempting cleanup of temporary file due to error: ${data.filePath}`);
+                    await fs.unlink(data.filePath);
+                    console.log(`   • Successfully deleted temporary file during error cleanup: ${data.filePath}`);
+                } catch (cleanupError) {
+                    console.error(` Failed to delete temporary file ${data.filePath} during error cleanup:`, cleanupError);
+                }
+            }
             throw error;
         }
     },

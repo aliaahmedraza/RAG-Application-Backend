@@ -1,124 +1,3 @@
-// import express from "express";
-// import cors from "cors";
-// import dotenv from "dotenv";
-// import multer from "multer";
-// import { Queue } from 'bullmq';
-// import { QdrantVectorStore } from "@langchain/qdrant";
-// // import { FakeEmbeddings } from "@langchain/core/utils/testing";
-// // import { OpenAIEmbeddings } from "@langchain/openai";
-// import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
-// import { CohereClient } from "cohere-ai"; // official cohere SDK
-// import OpenAI from "openai";
-
-
-// dotenv.config();
-
-// const app = express();
-// app.use(cors({ origin: "http://localhost:3000" }));
-// app.use(express.json());
-// // const client = new OpenAI({
-// //     apiKey: process.env.OPENAI_API_KEY,
-// // });
-// const cohere = new CohereClient({
-//     token: process.env.COHERE_API_KEY,
-// });
-// const storage = multer.diskStorage({
-//     destination: (_req, _file, cb) => {
-//         cb(null, "uploads/");
-//     },
-//     filename: (_req, file, cb) => {
-//         const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-//         cb(null, `${file.originalname}-${uniqueSuffix}`);
-//     },
-// });
-// const queue = new Queue('file-upload-queue', {
-//     connection: {
-//         host: process.env.REDIS_HOST,
-//         port: process.env.REDIS_PORT
-//     },
-// });
-// const upload = multer({ storage });
-// app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
-//     if (!req.file) {
-//         return res.status(400).json({
-//             error: "No file received. Please send your PDF in a multipart/form-data body under the field name 'pdf'."
-//         });
-//     }
-//     await queue.add('file-upload', JSON.stringify({
-//         filePath: req.file.path,
-//         fileName: req.file.originalname,
-//         fileSize: req.file.size,
-//         destination: req.file.destination,
-//     }));
-//     res.status(200).json({
-//         message: "File uploaded successfully",
-//         file: req.file
-//     });
-// });
-// app.get("/chat", async (req, res) => {
-//     const userQuery = req.query.message;
-//     if (!userQuery) {
-//         return res.status(400).json({
-//             error: "No query provided. Please provide a query in the URL as a query parameter."
-//         });
-//     }
-//     // const embeddings = new OpenAIEmbeddings({
-//     //     model: "text-embedding-3-small",
-//     //     apiKey: process.env.OPENAI_API_KEY,
-//     // });
-//     // const embeddings = new FakeEmbeddings();
-//     const embeddings = new CohereEmbeddings({
-//         apiKey: process.env.COHERE_API_KEY,
-//         model: "embed-english-v3.0",
-//     });
-
-//     const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
-//         url: process.env.QDRANT_URL,
-//         collectionName: "pdf-docs",
-//     });
-//     const retriever = vectorStore.asRetriever({
-//         k: 2,
-//     });
-//     const result = await retriever.invoke(userQuery);
-//     const SESTEM_PROMPT = `You are a helpful assistant.Please answer clearly and accurately from the provide odf context. Context: ${JSON.stringify(result)}`;
-//     const promptText = `${SESTEM_PROMPT}\n\nUser: ${userQuery}\nAssistant: `;
-//     // const chatResult = await client.chat.completions.create({
-//     //     model: "gpt-4.1",
-//     //     messages: [
-//     //         {
-//     //             role: "user",
-//     //             content: userQuery,
-//     //         },
-//     //         {
-//     //             role: "assistant",
-//     //             content: SESTEM_PROPMT,
-//     //         },
-//     //     ],
-//     // });
-//     // return res.status(200).json({
-//     //     message: `${ chatResult?.choices[0]?.message?.content } Query processed successfully`,
-//     //     docs: result
-//     // });
-//     const chatResult = await cohere.generate({
-//         model: "command-r-plus",
-//         prompt: promptText,
-//         max_tokens: 300,
-//         temperature: 0.7,
-//     });
-
-//     const answer = chatResult?.generations?.[0]?.text;
-
-//     return res.status(200).json({
-//         message: `${answer} `,
-//         message2: `Query processed successfully `,
-//         docs: result,
-//     });
-// });
-
-// const port = process.env.PORT;
-// app.listen(port, () => {
-//     console.log(`Server is running on port ${port} `);
-// });
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -128,38 +7,49 @@ import IORedis from 'ioredis';
 import { QdrantVectorStore } from "@langchain/qdrant";
 import { CohereEmbeddings } from "@langchain/community/embeddings/cohere";
 import { CohereClient } from "cohere-ai";
-import OpenAI from "openai";
+// import OpenAI from "openai"; // Removed as it's not used
 
 dotenv.config();
 
 const app = express();
-app.use(cors({ origin: "https://pdfrag-five.vercel.app"}));
+app.use(cors({ origin: process.env.CORS_ORIGIN || "https://pdfrag-five.vercel.app" }));
 app.use(express.json());
 
-const connection = new IORedis(process.env.VALKEY_URL, {
+const connection = new IORedis(process.env.VALKEY_URL, { // VALKEY_URL is already an env var
     maxRetriesPerRequest: null
 });
 console.log("✅ Redis connected in API:", process.env.VALKEY_URL);
 
 
-const queue = new Queue('file-upload-queue', { connection });
+const queue = new Queue(process.env.QUEUE_NAME || 'file-upload-queue', { connection });
 
 
 const storage = multer.diskStorage({
     destination: (_req, _file, cb) => {
-        cb(null, "uploads/");
+        cb(null, process.env.UPLOAD_DIR || "uploads/");
     },
     filename: (_req, file, cb) => {
         const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
         cb(null, `${file.originalname}-${uniqueSuffix}`);
     },
 });
-const upload = multer({ storage });
+
+const fileFilter = (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+        cb(null, true);
+    } else {
+        cb(new Error('Only PDF files are allowed!'), false);
+    }
+};
+
+const upload = multer({ storage, fileFilter });
 
 app.post("/upload/pdf", upload.single("pdf"), async (req, res) => {
+    // req.file will be undefined if fileFilter rejected or no file was provided
+    // The custom error handler will catch the 'Only PDF files are allowed!' error
     if (!req.file) {
         return res.status(400).json({
-            error: "No file received. Please send your PDF in a multipart/form-data body under the field name 'pdf'."
+            error: "No file received or file rejected by filter."
         });
     }
 
@@ -185,16 +75,16 @@ app.get("/chat", async (req, res) => {
     }
 
     const embeddings = new CohereEmbeddings({
-        apiKey: process.env.COHERE_API_KEY,
-        model: "embed-english-v3.0",
+        apiKey: process.env.COHERE_API_KEY, // Already an env var
+        model: process.env.COHERE_EMBED_MODEL || "embed-english-v3.0",
     });
 
     const vectorStore = await QdrantVectorStore.fromExistingCollection(embeddings, {
-        url: process.env.QDRANT_URL,
-        collectionName: "pdf-docs",
+        url: process.env.QDRANT_URL, // Already an env var
+        collectionName: process.env.QDRANT_COLLECTION_NAME || "pdf-docs",
     });
 
-    const retriever = vectorStore.asRetriever({ k: 2 });
+    const retriever = vectorStore.asRetriever({ k: parseInt(process.env.RETRIEVER_K_VALUE) || 2 });
     const result = await retriever.invoke(userQuery);
 
     const SESTEM_PROMPT = `You are a helpful assistant. Please answer clearly and accurately from the provided context.\nContext: ${JSON.stringify(result)}`;
@@ -202,23 +92,49 @@ app.get("/chat", async (req, res) => {
 
     const cohere = new CohereClient({ token: process.env.COHERE_API_KEY });
 
-    const chatResult = await cohere.generate({
-        model: "command-r-plus",
-        prompt: promptText,
-        max_tokens: 300,
-        temperature: 0.7,
-    });
+    try {
+        const chatResult = await cohere.generate({
+            model: process.env.COHERE_CHAT_MODEL || "command-r-plus",
+            prompt: promptText,
+            max_tokens: parseInt(process.env.CHAT_MAX_TOKENS) || 300,
+            temperature: parseFloat(process.env.CHAT_TEMPERATURE) || 0.7,
+        });
 
-    const answer = chatResult?.generations?.[0]?.text;
+        const answer = chatResult?.generations?.[0]?.text;
 
-    return res.status(200).json({
-        message: answer || "No response generated.",
-        message2: "Query processed successfully",
-        docs: result,
-    });
+        let message2 = "Query processed successfully";
+        if (!answer || answer === "No response generated.") {
+            message2 = "Query processed, but no answer generated.";
+        }
+
+        return res.status(200).json({
+            message: answer || "No response generated.",
+            message2: message2,
+            docs: result,
+        });
+    } catch (error) {
+        console.error("Error processing query:", error);
+        return res.status(500).json({
+            error: "Failed to process your query. Please try again later."
+        });
+    }
 });
 
 const port = process.env.PORT || 3006;
+
+// Custom error handler for Multer errors and others
+app.use((err, req, res, next) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: err.message });
+    } else if (err) {
+      if (err.message === 'Only PDF files are allowed!') {
+          return res.status(400).json({ error: err.message });
+      }
+      return res.status(500).json({ error: 'An unexpected error occurred.' });
+    }
+    next();
+  });
+
 app.listen(port, () => {
     console.log(`✅ API Server is running on port ${port}`);
 });
